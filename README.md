@@ -9,7 +9,7 @@ It showcases the optimal analytic solution to the flow-matching training objecti
 - Evaluating the flow involves computing distances with all data points, which is computationally expensive for large datasets.
 - It memorizes the data distribution, and only generates points at $t = 1$ that exist in the training data.
 
-## 📂 Repository Structure
+## 📂 File Structure
 
 * **2D Examples/**: Demonstrations of flow-matching in two-dimensional settings. Contains work for arbitrary schedules, final variances, and a variety of toy two-dimensional problems.
 * **CIFAR-10/**: Implementation with CIFAR-10 dataset.
@@ -18,8 +18,6 @@ It showcases the optimal analytic solution to the flow-matching training objecti
 * **MNIST/**: Implementation with MNIST dataset. This also contains a small flow-matching model trained on MNIST for comparison with the analytic results.
 * **analytic\_flow\_funcs.py**: Functions implementing analytical flow-matching for arbitrary schedules and datasets.
 * **image\_display\_funcs.py**: Utility functions for visualizing images and results.
-
-## 📊 Results
 
 The experiments demonstrate the efficacy of analytical solutions in flow-matching across different datasets. Visualizations are provided within each dataset's directory.
 
