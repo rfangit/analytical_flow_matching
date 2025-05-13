@@ -8,7 +8,7 @@ This repository provides code and experiments utilizing the optimal solution to 
 * **CIFAR-10/**: Implementation with CIFAR-10 dataset.
 * **Custom Dataset Example (Sine)/**: Example implementation for a custom dataset (a family of sine waves).
 * **ImageNet/**: Implementation with ImageNet dataset.
-* **MNIST/**: Implementation with MNIST dataset.
+* **MNIST/**: Implementation with MNIST dataset. This also contains a small flow-matching model trained on MNIST for comparison with the analytic results.
 * **analytic\_flow\_funcs.py**: Functions implementing analytical flow-matching for arbitrary schedules and datasets.
 * **image\_display\_funcs.py**: Utility functions for visualizing images and results.
 
