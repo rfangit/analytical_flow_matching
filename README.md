@@ -4,7 +4,7 @@
 
 This repository is a companion to the blog post **[“Optimal Flow-Matching”](https://rfangit.github.io/blog/2025/optimal_flow_matching/)**.
 
-It showcases the *analytical solution* to the flow-matching training objective, implemented for a variety of datasets including MNIST, CIFAR-10, and a subset of ImageNet. Although this solution is optimal in producing minimal MSEloss and does not require expensive training steps, there are two issues with it compared to a flow learned via deep learning:
+It showcases the optimal analytic solution to the flow-matching training objective, implemented for a variety of datasets including MNIST, CIFAR-10, and a subset of ImageNet. Although this solution is optimal in producing minimal MSEloss and does not require expensive training steps, there are two issues with it compared to a flow learned via deep learning:
 
 - Evaluating the flow involves computing distances with all data points, which is computationally expensive for large datasets.
 - It memorizes the data distribution, and only generates points at $t = 1$ that exist in the training data.
