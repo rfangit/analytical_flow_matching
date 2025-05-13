@@ -1,5 +1,11 @@
 # Analytical Flow Matching
 
+<img src="\2D Examples\Linear Schedule - Other Distributions\imgs\checkerboard_example.png" style="width:100%; max-width:800px;"/>
+
+This repository is a companion to the blog post **[“Optimal Flow-Matching”](https://rfangit.github.io/blog/2025/optimal_flow_matching/)**. It showcases the *analytical solution* to the flow-matching training objective, implemented for a variety of datasets including MNIST, CIFAR-10, and a subset of ImageNet.
+
+# Analytical Flow Matching
+
 This repository provides code and experiments utilizing the optimal solution to the flow-matching training objective. It serves as a reference for understanding and implementing analytical solutions in flow-matching tasks across various datasets.
 
 ## 📂 Repository Structure
