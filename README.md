@@ -2,11 +2,12 @@
 
 <img src="\2D Examples\Linear Schedule - Other Distributions\imgs\checkerboard_example.png" style="width:100%; max-width:800px;"/>
 
-This repository is a companion to the blog post **[“Optimal Flow-Matching”](https://rfangit.github.io/blog/2025/optimal_flow_matching/)**. It showcases the *analytical solution* to the flow-matching training objective, implemented for a variety of datasets including MNIST, CIFAR-10, and a subset of ImageNet.
+This repository is a companion to the blog post **[“Optimal Flow-Matching”](https://rfangit.github.io/blog/2025/optimal_flow_matching/)**.
 
-# Analytical Flow Matching
+It showcases the *analytical solution* to the flow-matching training objective, implemented for a variety of datasets including MNIST, CIFAR-10, and a subset of ImageNet. Although this solution is optimal in producing minimal MSEloss and does not require expensive training steps, there are two issues with it compared to a flow learned via deep learning:
 
-This repository provides code and experiments utilizing the optimal solution to the flow-matching training objective. It serves as a reference for understanding and implementing analytical solutions in flow-matching tasks across various datasets.
+- Evaluating the flow involves computing distances with all data points, which is computationally expensive for large datasets.
+- It memorizes the data distribution, and only generates points at $t = 1$ that exist in the training data.
 
 ## 📂 Repository Structure
 
