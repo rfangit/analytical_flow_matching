@@ -1,6 +1,6 @@
 # Analytical Flow Matching
 
-This repository provides code and experiments utilizing the optimal solution to the flow-matching training objective. It serves as a reference for understanding and implementing analytical solutions in flow-matching tasks across various datasets.([Gist][1])
+This repository provides code and experiments utilizing the optimal solution to the flow-matching training objective. It serves as a reference for understanding and implementing analytical solutions in flow-matching tasks across various datasets.
 
 ## 📂 Repository Structure
 
