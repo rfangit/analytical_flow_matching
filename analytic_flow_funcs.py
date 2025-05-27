@@ -1,39 +1,69 @@
 import torch
 
-def compute_linear_velocity_batch(
-    current_points: torch.Tensor,  # Shape [M, *dims] (e.g. [M,d] or [M,d1,d2,...])
+def compute_linear_velocity_batch_time(
+    current_points: torch.Tensor,  # Shape [M, *dims]
     data: torch.Tensor,            # Shape [N, *dims]
-    t: float,
+    t: torch.Tensor,               # Shape [M] (batch of time values)
     sigma_i: float,
-    coefficients=None
+    coefficients=None              # Shape [N] (weights of the data points)
 ) -> torch.Tensor:
     """
-    Generalized version handling arbitrary auxiliary dimensions.
+    Computes velocity for batched inputs with time as tensor.    
+    Returns: velocities: [M, *dims] computed velocities
     """
-    alpha = 1 - t
-    beta = t
+    # Reshaping time values for broadcasting
+    # We need to multiply target data by time [M, 1, *dims]
+    # We need to multiply the differences between target and data [M, N]
+    # We need to multiply the final vector which requires [M, *dims]
+    t_reshaped = t.view(-1, *([1]*(data.dim())))  # [M, 1, *dims]
+    t_reshaped_2 = t.view(-1, *([1]*(data.dim() - 1)))  # [M, *dims]
+    t_reshaped_3 = t[:, None]  # [M, 1]
     
-    # Reshape tensors for broadcasting [M, N, *dims]
+    beta = t_reshaped       # [M, 1, *dims]
+    alpha = 1 - t_reshaped  # [M, 1, *dims]
+    alpha2 = 1 - t_reshaped_2 # [M, *dims]
+    alpha3 = 1 - t_reshaped_3 # [M, 1]
+
+    data_exp = data.unsqueeze(0)                    # Reshape data to [1, N, *dims]
+    data_scaled = beta * data_exp               # [M, 1, *dims] * [1, N, *dims] => [M, N, *dims] 
     current_expanded = current_points.unsqueeze(1)  # [M, 1, *dims]
-    data_scaled = data * beta                      # [N, *dims]
-    data_expanded = data_scaled.unsqueeze(0)       # [1, N, *dims]
     
-    # Compute squared distances [M, N], summing over the other dimensions
-    diff = current_expanded - data_expanded  # [M, N, *dims]
+    # Compute distances
+    diff = current_expanded - data_scaled           # [M, N, *dims]
     squared_dist = torch.sum(diff**2, dim=tuple(range(2, diff.dim())))  # [M, N]
-    
+
     # Compute softmax weights [M, N]
-    logits = -0.5 * squared_dist / (alpha**2 * sigma_i)
+    logits = -0.5 * squared_dist/(alpha3**2 * sigma_i)
     if coefficients is not None:
         logits = logits + torch.log(coefficients).unsqueeze(0)
     weights = torch.softmax(logits, dim=1)  # [M, N]
     
-    # Compute expected value of output points over softmax probs [M, *dims]
-    # Einsum 'mn,n...->m...' = sum over n for each m and auxiliary dimensions
+    # Compute weighted sum [M, *dims]
     weighted_sum = torch.einsum('mn,n...->m...', weights, data)  # [M, *dims]
     
-    # Compute final velocities [M, *dims]
-    velocities = (weighted_sum - current_points) / alpha
+    # Compute velocities [M, *dims]
+    velocities = (weighted_sum - current_points) / alpha2
+    return velocities
+
+def compute_linear_velocity_batch(
+    current_points: torch.Tensor,  # Shape [M, *dims]
+    data: torch.Tensor,            # Shape [N, *dims]
+    t: float,                      
+    sigma_i: float,
+    coefficients=None              # Shape [N] (weights of the data points)
+) -> torch.Tensor:
+    """
+    Computes velocity for batched inputs with time as a fixed scalar for all entries.    
+    Returns: velocities: [M, *dims] computed velocities
+    """
+    M = current_points.shape[0]
+    tensor_t = torch.full((M,), t, dtype=torch.float32, device=current_points.device)
+    velocities = compute_linear_velocity_batch_time(current_points = current_points,  # Shape [M, *dims]
+                                                    data = data,            # Shape [N, *dims]
+                                                    t = tensor_t,               # Shape [M] (batch of time values)
+                                                    sigma_i = sigma_i,
+                                                    coefficients=coefficients              # Shape [N] (weights of the data points)
+                                                    )
     return velocities
 
 def forward_euler_integration_analytic_linear(
