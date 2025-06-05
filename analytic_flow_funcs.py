@@ -21,7 +21,8 @@ def compute_linear_velocity_batch_time(
     t_reshaped_2 = t.view(-1, *([1]*(data.dim() - 1)))  # [M, *dims]
     
     beta = t_reshaped       # [M, 1, *dims]
-    alpha = 1 - t_reshaped_2 # [M, *dims]
+    alpha = 1 - t_reshaped  # [M, 1, *dims]
+    alpha2 = 1 - t_reshaped_2 # [M, *dims]
 
     data_exp = data.unsqueeze(0)                    # Reshape data to [1, N, *dims]
     data_scaled = beta * data_exp               # [M, 1, *dims] * [1, N, *dims] => [M, N, *dims] 
@@ -41,7 +42,7 @@ def compute_linear_velocity_batch_time(
     weighted_sum = torch.einsum('mn,n...->m...', weights, data)  # [M, *dims]
     
     # Compute velocities [M, *dims]
-    velocities = (weighted_sum - current_points) / alpha
+    velocities = (weighted_sum - current_points) / alpha2
     return velocities
 
 def compute_linear_velocity_batch(
@@ -260,46 +261,6 @@ def forward_euler_integration_analytic(
 #################################
 ## Appendix 4.1 Implementation ##
 #################################
-def compute_linear_velocity_batch_time(
-    current_points: torch.Tensor,  # Shape [M, *dims]
-    data: torch.Tensor,            # Shape [N, *dims]
-    t: torch.Tensor,               # Shape [M] (batch of time values)
-    sigma_i: float,
-    sigma_f:torch.Tensor           # Shape [N]
-    coefficients=None              # Shape [N] (weights of the data points)
-) -> torch.Tensor:
-    """
-    Computes velocity for batched inputs with time as tensor.    
-    Returns: velocities: [M, *dims] computed velocities
-    """
-    # Reshaping time values for broadcasting
-    # We need to multiply target data by time [M, 1, *dims]
-    # We need to multiply the final vector which requires [M, *dims]
-    # We need to multiply the post L2 norm softmax argument, which requires [M, 1]
-    t_reshaped = t.view(-1, *([1]*(data.dim())))  # [M, 1, *dims]
-    t_reshaped_2 = t.view(-1, *([1]*(data.dim() - 1)))  # [M, *dims]
-    t_reshaped_3 = t.unsqueeze(-1)
-    
-    data_exp = data.unsqueeze(0)                    # Reshape data to [1, N, *dims]
-    data_scaled = t_reshaped * data_exp               # [M, 1, *dims] * [1, N, *dims] => [M, N, *dims] 
-    current_expanded = current_points.unsqueeze(1)  # [M, 1, *dims]
-    
-    # Compute distances
-    diff = (current_expanded - data_scaled)/(sigma_i * (1 - t_reshaped_3)**2 + t_reshaped_3**2 * sigma_f) # [M, N, *dims]
-    squared_dist = torch.sum(diff**2, dim=tuple(range(2, diff.dim())))  # [M, N]
 
-    # Compute softmax weights [M, N]
-    logits = -0.5 * squared_dist/(sigma_i)
-    if coefficients is not None:
-        logits = logits + torch.log(coefficients).unsqueeze(0)
-    weights = torch.softmax(logits, dim=1)  # [M, N]
-    
-    # Compute weighted sum [M, *dims]
-    weighted_sum = torch.einsum('mn,n...->m...', weights, data)  # [M, *dims]
-    
-    # Compute velocities [M, *dims]
-    softmax_vector = weighted_sum * ((1 - t_reshaped_2)*sigma_i)((1 - t_reshaped_2)**2 * sigma_i + t_reshaped_2**2 * sigma_f)
-    velocities = (weighted_sum - current_points) / alpha
-    return velocities
 
 
