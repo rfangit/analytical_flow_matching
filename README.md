@@ -43,7 +43,7 @@ analytic_flow_funcs has support for:
 - linear time flow with scalar time input (Appendix 4.2)
 - linear time flow with tensor time input (eg, when flowing to M data points, you can specify M time values)
 - arbitrary time flow with finite but uniform variance for data points (Appendix 4, partial implemenation - no support for different variances)
+- linear time flow with distinct variances (Appendix 4.4)
 
 It does not support:
-- arbitrary time flow with distinct variances (No simplified equation in Appendix)
-- linear time flow with distinct variances (Appendix 4.3, in progress)
+- arbitrary time flow with distinct variances (Appendix 4.3)

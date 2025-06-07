@@ -3,3 +3,4 @@
 
 # Ignore all data directories
 **/data/
+**/Tests/

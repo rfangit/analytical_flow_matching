@@ -259,8 +259,98 @@ def forward_euler_integration_analytic(
     return trajectory
 
 #################################
-## Appendix 4.1 Implementation ##
+## Appendix 4.4 Implementation ##
 #################################
+def compute_linear_velocity_batch_time_arb_var(
+    current_points: torch.Tensor,  # Shape [M, *dims]
+    data: torch.Tensor,            # Shape [N, *dims]
+    t: torch.Tensor,               # Shape [M]
+    sigma_i: float,
+    sigma_f: torch.Tensor,         # Shape [N]
+    coefficients: torch.Tensor,    # Shape [N]
+    return_intermediates: bool = False  # Optional debugging
+) -> torch.Tensor | tuple[torch.Tensor, dict]:
+    """
+    Computes velocity for batched inputs with time as tensor.
 
+    Args:
+        current_points: [M, *dims] positions
+        data: [N, *dims] target points
+        t: [M] batch of time values
+        sigma_i: float
+        sigma_f: [N] final std devs
+        coefficients: [N] mixture weights
+    """
 
+    t_reshaped = t.view(-1, *([1]*(data.dim())))  # [M, 1, *dims]
+    t_reshaped_2 = t.unsqueeze(-1)                # [M, 1]
+    sigma_f_reshaped = sigma_f.unsqueeze(0)       # [1, N]
+    sigma_f_reshaped_2 = sigma_f.view(1, -1, *[1]*(data.dim() - 1))  # [1, N, *dims]
+    coefficients_reshaped = coefficients.unsqueeze(0)  # [1, N]
 
+    data_exp = data.unsqueeze(0)                    # [1, N, *dims]
+    data_scaled = t_reshaped * data_exp             # [M, N, *dims]
+    current_expanded = current_points.unsqueeze(1)  # [M, 1, *dims]
+
+    diff = (current_expanded - data_scaled)         # [M, N, *dims]
+    squared_dist = torch.sum(diff**2, dim=tuple(range(2, diff.dim())))  # [M, N]
+
+    denominator = (1 - t_reshaped_2)**2 * sigma_i + t_reshaped_2**2 * sigma_f_reshaped  # [M, N]
+    logits = -0.5 * squared_dist / (denominator)
+    logits += torch.log((1 - t_reshaped_2) * coefficients_reshaped) - 0.5 * torch.log(denominator)
+
+    weights = torch.softmax(logits, dim=1)  # [M, N]
+
+    denominator_2 = (1 - t_reshaped)**2 * sigma_i + t_reshaped**2 * sigma_f_reshaped_2  # [M, N, *dims]
+    x_num = t_reshaped * sigma_f_reshaped_2 - (1 - t_reshaped) * sigma_i                # [M, N, *dims]
+    data_num = (1 - t_reshaped) * sigma_i                                               # [M, 1, *dims]
+    net_weight_vec = (current_expanded * x_num + data_num * data_exp) / denominator_2  # [M, N, *dims]
+
+    velocities = torch.sum(weights.unsqueeze(-1) * net_weight_vec, dim=1)  # [M, *dims]
+
+    return velocities
+
+def forward_euler_integration_batch_time_var(
+    initial_points: torch.Tensor,  # Initial positions [M, D]
+    data: torch.Tensor,            # Data points [N, D]
+    t_start: float,                # Start time
+    t_end: float,                  # End time
+    num_steps: int,                # Number of time steps
+    sigma_i: float,                # Initial variance (scalar)
+    sigma_f: torch.Tensor,         # Final variances [N]
+    coefficients: torch.Tensor     # Data weights [N]
+) -> torch.Tensor:
+    """
+    Forward Euler integration using compute_linear_velocity_batch_time_arb_var,
+    which supports arbitrary time tensors and per-data-point final variances.
+    
+    Returns:
+        Trajectory of shape [num_steps + 1, M, D]
+    """
+    dt = (t_end - t_start) / num_steps
+    trajectory = torch.zeros(num_steps + 1, *initial_points.shape, device=initial_points.device)
+    trajectory[0] = initial_points.clone()
+    
+    current_points = initial_points.clone()
+    current_time = t_start
+
+    for step in range(1, num_steps + 1):
+        # Make time tensor of shape [M] matching current_points
+        t_tensor = torch.full((current_points.shape[0],), current_time, device=current_points.device)
+
+        # Compute velocity
+        velocity = compute_linear_velocity_batch_time_arb_var(
+            current_points=current_points,
+            data=data,
+            t=t_tensor,
+            sigma_i=sigma_i,
+            sigma_f=sigma_f,
+            coefficients=coefficients
+        )
+
+        # Euler update
+        current_points = current_points + velocity * dt
+        current_time += dt
+        trajectory[step] = current_points.clone()
+
+    return trajectory
