@@ -268,7 +268,6 @@ def compute_linear_velocity_batch_time_arb_var(
     sigma_i: float,
     sigma_f: torch.Tensor,         # Shape [N]
     coefficients: torch.Tensor,    # Shape [N]
-    return_intermediates: bool = False  # Optional debugging
 ) -> torch.Tensor | tuple[torch.Tensor, dict]:
     """
     Computes velocity for batched inputs with time as tensor.
@@ -295,9 +294,15 @@ def compute_linear_velocity_batch_time_arb_var(
     diff = (current_expanded - data_scaled)         # [M, N, *dims]
     squared_dist = torch.sum(diff**2, dim=tuple(range(2, diff.dim())))  # [M, N]
 
+    ## Determining the dimensionality of the problem.
+    ## Important for the independent gaussian assumption, since we
+    ## need to know the number of dimensions for which sigma_f has an effect
+    dims = current_points.shape[1:]  # This gets *dims
+    net_dim_coeff = torch.prod(torch.tensor(dims)).item()*0.5
+
     denominator = (1 - t_reshaped_2)**2 * sigma_i + t_reshaped_2**2 * sigma_f_reshaped  # [M, N]
     logits = -0.5 * squared_dist / (denominator)
-    logits += torch.log((1 - t_reshaped_2) * coefficients_reshaped) - 0.5 * torch.log(denominator)
+    logits += torch.log((1 - t_reshaped_2) * coefficients_reshaped) - net_dim_coeff * torch.log(denominator)
 
     weights = torch.softmax(logits, dim=1)  # [M, N]
 
