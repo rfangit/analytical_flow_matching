@@ -3,6 +3,53 @@ import torch
 #################################
 ## Appendix 4.2 Implementation ##
 #################################
+def compute_linear_velocity_batch_time_bias(
+    current_points: torch.Tensor,  # Shape [M, *dims]
+    data: torch.Tensor,            # Shape [N, *dims]
+    t: torch.Tensor,               # Shape [M] (batch of time values)
+    sigma_i: float,
+    coefficients=None,             # Shape [N] (weights of the data points)
+    bias_num: int = 5              # Number of top biases to return
+) -> torch.Tensor:
+    """
+    Computes velocity for batched inputs with time as tensor.    
+    Returns:
+        velocities: [M, *dims] computed velocities
+        bias: [M, bias_num] top softmax weights per example
+    """
+    # Reshaping time values for broadcasting
+    t_reshaped = t.view(-1, *([1]*(data.dim())))  # [M, 1, *dims]
+    t_reshaped_2 = t.view(-1, *([1]*(data.dim() - 1)))  # [M, *dims]
+    
+    beta = t_reshaped       # [M, 1, *dims]
+    alpha = 1 - t_reshaped  # [M, 1, *dims]
+    alpha2 = 1 - t_reshaped_2 # [M, *dims]
+
+    data_exp = data.unsqueeze(0)                    # Reshape data to [1, N, *dims]
+    data_scaled = beta * data_exp                    # [M, N, *dims]
+    current_expanded = current_points.unsqueeze(1)  # [M, 1, *dims]
+    
+    # Compute distances
+    diff = (current_expanded - data_scaled) / alpha           # [M, N, *dims]
+    squared_dist = torch.sum(diff**2, dim=tuple(range(2, diff.dim())))  # [M, N]
+
+    # Compute softmax weights [M, N]
+    logits = -0.5 * squared_dist / sigma_i
+    if coefficients is not None:
+        logits = logits + torch.log(coefficients).unsqueeze(0)
+    weights = torch.softmax(logits, dim=1)  # [M, N]
+    
+    # Compute weighted sum [M, *dims]
+    weighted_sum = torch.einsum('mn,n...->m...', weights, data)  # [M, *dims]
+    
+    # Compute velocities [M, *dims]
+    velocities = (weighted_sum - current_points) / alpha2
+
+    # Get top bias_num weights
+    bias, _ = torch.topk(weights, k=bias_num, dim=1)  # [M, bias_num]
+
+    return velocities, bias
+
 def compute_linear_velocity_batch_time(
     current_points: torch.Tensor,  # Shape [M, *dims]
     data: torch.Tensor,            # Shape [N, *dims]
@@ -311,9 +358,73 @@ def compute_linear_velocity_batch_time_arb_var(
     data_num = (1 - t_reshaped) * sigma_i                                               # [M, 1, *dims]
     net_weight_vec = (current_expanded * x_num + data_num * data_exp) / denominator_2  # [M, N, *dims]
 
-    velocities = torch.sum(weights.unsqueeze(-1) * net_weight_vec, dim=1)  # [M, *dims]
+    extra_dims = net_weight_vec.dim() - 2  # net_weight_vec has [M, N, *dims]
+    weights_reshaped = weights.view(weights.shape[0], weights.shape[1], *([1] * extra_dims))
 
+    velocities = torch.sum(weights_reshaped * net_weight_vec, dim=1)  # Result: [M, *dims]
+    
     return velocities
+
+def compute_linear_velocity_batch_time_arb_var_bias(
+    current_points: torch.Tensor,  # Shape [M, *dims]
+    data: torch.Tensor,            # Shape [N, *dims]
+    t: torch.Tensor,               # Shape [M]
+    sigma_i: float,
+    sigma_f: torch.Tensor,         # Shape [N]
+    coefficients: torch.Tensor,    # Shape [N]
+    bias_num: int = 5              # Number of top biases to return
+) -> torch.Tensor | tuple[torch.Tensor, dict]:
+    """
+    Computes velocity for batched inputs with time as tensor.
+
+    Args:
+        current_points: [M, *dims] positions
+        data: [N, *dims] target points
+        t: [M] batch of time values
+        sigma_i: float
+        sigma_f: [N] final std devs
+        coefficients: [N] mixture weights
+    """
+
+    t_reshaped = t.view(-1, *([1]*(data.dim())))  # [M, 1, *dims]
+    t_reshaped_2 = t.unsqueeze(-1)                # [M, 1]
+    sigma_f_reshaped = sigma_f.unsqueeze(0)       # [1, N]
+    sigma_f_reshaped_2 = sigma_f.view(1, -1, *[1]*(data.dim() - 1))  # [1, N, *dims]
+    coefficients_reshaped = coefficients.unsqueeze(0)  # [1, N]
+
+    data_exp = data.unsqueeze(0)                    # [1, N, *dims]
+    data_scaled = t_reshaped * data_exp             # [M, N, *dims]
+    current_expanded = current_points.unsqueeze(1)  # [M, 1, *dims]
+
+    diff = (current_expanded - data_scaled)         # [M, N, *dims]
+    squared_dist = torch.sum(diff**2, dim=tuple(range(2, diff.dim())))  # [M, N]
+
+    ## Determining the dimensionality of the problem.
+    ## Important for the independent gaussian assumption, since we
+    ## need to know the number of dimensions for which sigma_f has an effect
+    dims = current_points.shape[1:]  # This gets *dims
+    net_dim_coeff = torch.prod(torch.tensor(dims)).item()*0.5
+
+    denominator = (1 - t_reshaped_2)**2 * sigma_i + t_reshaped_2**2 * sigma_f_reshaped  # [M, N]
+    logits = -0.5 * squared_dist / (denominator)
+    logits += torch.log((1 - t_reshaped_2) * coefficients_reshaped) - net_dim_coeff * torch.log(denominator)
+
+    weights = torch.softmax(logits, dim=1)  # [M, N]
+
+    denominator_2 = (1 - t_reshaped)**2 * sigma_i + t_reshaped**2 * sigma_f_reshaped_2  # [M, N, *dims]
+    x_num = t_reshaped * sigma_f_reshaped_2 - (1 - t_reshaped) * sigma_i                # [M, N, *dims]
+    data_num = (1 - t_reshaped) * sigma_i                                               # [M, 1, *dims]
+    net_weight_vec = (current_expanded * x_num + data_num * data_exp) / denominator_2  # [M, N, *dims]
+
+    extra_dims = net_weight_vec.dim() - 2  # net_weight_vec has [M, N, *dims]
+    weights_reshaped = weights.view(weights.shape[0], weights.shape[1], *([1] * extra_dims))
+
+    velocities = torch.sum(weights_reshaped * net_weight_vec, dim=1)  # Result: [M, *dims]
+    
+    # Get top bias_num weights
+    bias, _ = torch.topk(weights, k=bias_num, dim=1)  # [M, bias_num]
+
+    return velocities, bias
 
 def forward_euler_integration_batch_time_var(
     initial_points: torch.Tensor,  # Initial positions [M, D]
